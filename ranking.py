@@ -25,8 +25,8 @@ PROCESS:
     4. represent all documents as vectors in a large vector space[see getDocVector()]
 
         - SHORT EXPLANATION: the two functions above will return a vector (list) of the tf-idf scores of all the terms in the doc/query making use of calcTfIdf()
+    
     5. compute the cosine similarity between the queryVector and EACH documentVector and store inside a dictionary 
-
 
     6. sort the dictionary by value in descending order [the higher a cosine similarity -> the more relevant the doc is]
 
