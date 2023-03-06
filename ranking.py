@@ -86,7 +86,7 @@ def getQueryVector(query: str, invertedIndex: dict, docLengthDict: dict):
         queryVector.append(score)
 
     return queryVector
-
+ 
 
 # This function takes in the queryVector and docVector and calculates the cosine similarity beteween the two
 def calcCosineSim(qv: list, dv: list):
