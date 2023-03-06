@@ -40,6 +40,7 @@ def process_file(file_path, docID):
 def make_index(path: str):
     inverted_index = {chr(i): {} for i in range(97, 123)}
     docCount = 0
+    docID = 0
     counter = 1
     totalTokens = 0
     pool = Pool()
@@ -54,10 +55,9 @@ def make_index(path: str):
             file_paths = [os.path.join(os.getcwd(), file) for file in os.listdir(os.getcwd())]
             # the following line uses multithreading to parse each url with the process_file function
             # returns (docID, Counter{token: freq})
-            results = pool.starmap(process_file, zip(file_paths, [i for i in range(counter,len(file_paths)+1)]))
+            results = pool.starmap(process_file, zip(file_paths, [i for i in range(counter,len(file_paths)+counter+1)]))
             counter += len(file_paths)
 
-            docID = 0
             for result in results:
                 docID += 1
                 token_counts = result[1]
@@ -71,6 +71,7 @@ def make_index(path: str):
                     #                  dict(letter -> dict(tokenStartingWithLetter -> list of docId, count pair lists))
                     inverted_index[first_letter].setdefault(token, []).append([docID, count])
             docCount += len(results)
+            print(docCount)
             print("INDEX UPDATED\n")
             os.chdir("..")
         except NotADirectoryError:
@@ -123,10 +124,8 @@ def findResults(qWords: list, index: dict):
     end_time = time.perf_counter()
     # Where ranking should be implemented: (For now, it is ranked based on token occurence frequency)
     matched_docs.sort(key=lambda x: -1 * x[1])
-    print(map[2394])
     for x in range(0,min(5, len(matched_docs))):
-        print(map[(matched_docs[x][0])])
-        print(f"{x+1}) {matched_docs[x][0]} with {matched_docs[x][1]} occurences")
+        print(f"{x+1}) {map[matched_docs[x][0]][0]} with {matched_docs[x][1]} occurences")
     print(f"SEARCH TIME: {end_time-start_time:.3f} seconds")
     print()
     return matched_docs
