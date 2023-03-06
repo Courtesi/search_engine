@@ -40,6 +40,7 @@ def process_file(file_path, docID):
 def make_index(path: str):
     inverted_index = {chr(i): {} for i in range(97, 123)}
     docCount = 0
+    counter = 1
     totalTokens = 0
     pool = Pool()
     # iterates through all folders in DEV
@@ -53,13 +54,13 @@ def make_index(path: str):
             file_paths = [os.path.join(os.getcwd(), file) for file in os.listdir(os.getcwd())]
             # the following line uses multithreading to parse each url with the process_file function
             # returns (docID, Counter{token: freq})
-            map = {}
-            results = pool.starmap(process_file, zip(file_paths, [i for i in range(1,len(file_paths)+1)]))
+            results = pool.starmap(process_file, zip(file_paths, [i for i in range(counter,len(file_paths)+1)]))
+            counter += len(file_paths)
 
+            docID = 0
             for result in results:
-                docID = result[0]
+                docID += 1
                 token_counts = result[1]
-                map = result[2]
                 for token, count in token_counts.items():
                     totalTokens += 1
                     first_letter = token[0].lower()
@@ -122,16 +123,19 @@ def findResults(qWords: list, index: dict):
     end_time = time.perf_counter()
     # Where ranking should be implemented: (For now, it is ranked based on token occurence frequency)
     matched_docs.sort(key=lambda x: -1 * x[1])
+    print(map[2394])
     for x in range(0,min(5, len(matched_docs))):
-        print(f"{x+1}) {map[matched_docs[x][0]][0]} with {matched_docs[x][1]} occurences")
+        print(map[(matched_docs[x][0])])
+        print(f"{x+1}) {matched_docs[x][0]} with {matched_docs[x][1]} occurences")
     print(f"SEARCH TIME: {end_time-start_time:.3f} seconds")
     print()
     return matched_docs
 
 if __name__ == "__main__":
     # !!!
-    # CHANGE THIS TO TRUE IF YOU ARE RUNNING FOR THE FIRST TIME AND NEED TO BUILD THE INDEX
-    buildIndex = True
+    # SET TRUE IF YOU ARE RUNNING FOR THE FIRST TIME AND NEED TO BUILD THE INDEX
+    # SET FALSE IF INDEX IS ALREADY BUILT AND YOU ARE READY TO SEARCH ONLY
+    buildIndex = False
     if buildIndex:
         if os.path.exists(os.path.join(os.getcwd(), "docID_mapping.txt")):
             os.remove(os.path.join(os.getcwd(), "docID_mapping.txt"))
