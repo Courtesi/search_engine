@@ -37,7 +37,7 @@ THOUGHT:
 
 """
 
-# This function calculates the tf-idf score for a term within a given document and is meant to be passed every docID a term is mapped to in the Inverted Index.
+# This function calculates the tf-idf score for a term within a given document 
 def calcTfIdf(term: str, docID: int, invertedIndex: dict, docLengthDict: dict):
 
     # dividing by the # of terms in the docID in order to normalize the size of a document for comparison
@@ -90,7 +90,7 @@ def getQueryVector(query: str, invertedIndex: dict, docLengthDict: dict):
 
 # This function takes in the queryVector and docVector and calculates the cosine similarity beteween the two
 def calcCosineSim(qv: list, dv: list):
-     # normalize the query vector by dividing by its L2 norm
+     # normalize the query vector by dividing by its L2 norm (see lecture 21: 15:38)
     query_norm = math.sqrt(sum([x**2 for x in qv]))
     query_norm_vector = [x / query_norm for x in qv]
 
@@ -117,6 +117,7 @@ def getRankedDocs(query: str, invertedIndex: dict, docLengthDict: dict):
     # Sort documents by value in descending order
     rankedDocs = sorted(similarityScores.items(), key=lambda x: x[1], reverse=True)
     
+    # Return top 5 results
     return rankedDocs[:5]
 
 if __name__ == '__main__':
