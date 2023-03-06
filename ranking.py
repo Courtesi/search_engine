@@ -102,7 +102,7 @@ def calcCosineSim(qv: list, dv: list):
     cosineSim = sum([x * y for x, y in zip(query_norm_vector, document_norm_vector)])
 
     return cosineSim
-
+ 
 def getRankedDocs(query: str, invertedIndex: dict, docLengthDict: dict):
 
     # process: generate queryVector -> get all the docID's related -> generate their corresponding docVectors -> compute their cosine sims
