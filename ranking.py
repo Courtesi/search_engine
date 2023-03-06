@@ -29,7 +29,7 @@ PROCESS:
     5. compute the cosine similarity between the queryVector and EACH documentVector and store inside a dictionary 
 
     6. sort the dictionary by value in descending order [the higher a cosine similarity -> the more relevant the doc is]
-
+    
     7. return the top k-docs in the dictionary 
 
 THOUGHT: 
