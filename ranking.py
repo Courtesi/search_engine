@@ -1,5 +1,9 @@
 import math
-from collections import defaultdict
+from collections import defaultdict, Counter
+from nltk.tokenize import word_tokenize
+# from sklearn.metrics import cosine_similarity
+
+
 
 """ The functions in this module are meant to be called in search_engine.py; use them as utilities"""
 
@@ -41,9 +45,9 @@ THOUGHT:
 def calcTfIdf(term: str, docID: int, invertedIndex: dict, docLengthDict: dict):
 
     # dividing by the # of terms in the docID in order to normalize the size of a document for comparison
-    termFreq = index[term][docID] / docLengthDict[docID]
+    termFreq = invertedIndex[term][docID] / docLengthDict[docID]
     
-    inverseDocFreq = math.log(len(doc_lengths) / len(invertedIndex[term]))
+    inverseDocFreq = math.log(len(docLengthDict) / len(invertedIndex[term]))
 
     # The tf-idf score is just the dot product of both tf and idf
     score = termFreq * inverseDocFreq
@@ -70,7 +74,7 @@ def getDocVector(docID: int, invertedIndex: dict, docLengthDict: dict):
 # This function constructs a vector to represent a query in a large dimensional vector space
 def getQueryVector(query: str, invertedIndex: dict, docLengthDict: dict):
     # Tokenize query into terms (QUERY PREPROCESSING HERE)
-    query_terms = tokenize(query)
+    query_terms = word_tokenize(query)
 
     # Calculate term frequencies in query
     query_tf = Counter(query_terms)
@@ -109,13 +113,13 @@ def getRankedDocs(query: str, invertedIndex: dict, docLengthDict: dict):
     #  -> add the cosine sims to docs list -> sort docs list and return top K docs
     docScores = defaultdict(float)
 
-    queryVector = getQueryVector(query, invertedINdex, docLengthDict)
+    queryVector = getQueryVector(query, invertedIndex, docLengthDict)
     for docID in docLengthDict.keys(): # change this to be appropriate for the _keys_ key value pair in the invertedIndex
         docVector = getDocVector(docID, invertedIndex, docLengthDict)
-        similarityScores[docID] = calcCosineSim(queryVector, docVector)
+        docScores[docID] = calcCosineSim(queryVector, docVector)
     
     # Sort documents by value in descending order
-    rankedDocs = sorted(similarityScores.items(), key=lambda x: x[1], reverse=True)
+    rankedDocs = sorted(docScores.items(), key=lambda x: x[1], reverse=True)
     
     # Return top 5 results
     return rankedDocs[:5]
