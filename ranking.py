@@ -114,7 +114,28 @@ def getRankedDocs(query: str, invertedIndex: dict, docLengthDict: dict):
     docScores = defaultdict(float)
 
     queryVector = getQueryVector(query, invertedIndex, docLengthDict)
-    for docID in docLengthDict.keys(): # change this to be appropriate for the _keys_ key value pair in the invertedIndex
+
+    numTerms = len(query.split(" "))
+    numDiscoveredDocs = 0
+    ### INSERT CODE TO REDUCE DOCUMENT SIZE FROM N -> A -> K ###
+    while numDiscoveredDocs != 5:
+        # constructs a list that gets all the documents that contains N terms of the query
+        # figure out how to see if the document has n terms / total terms 
+
+        # replace the lambda below with a custom function that checks if a document
+        # has >= N query terms and if the current threshold number of 
+        # query terms is in the document
+        filteredKeys = list(filter(lambda x: docLengthDict[x] >= numTerms, docLengthDict.keys()))
+        numDiscoveredDocs += len(filteredKeys)
+        
+        if numDiscoveredDocs == 5:
+            break
+
+        numTerms -= 1
+
+    ### END DOCUMENT FILTER ###
+    
+    for docID in docLengthDict.keys(): 
         docVector = getDocVector(docID, invertedIndex, docLengthDict)
         docScores[docID] = calcCosineSim(queryVector, docVector)
     
