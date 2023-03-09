@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import pickle
 import sys
 import time
@@ -9,7 +10,7 @@ from bs4 import BeautifulSoup
 import nltk
 from nltk.stem import PorterStemmer
 from nltk.tokenize import word_tokenize
-import store_index
+import store_index, store_byte_index
 stemmer = PorterStemmer()
 
 
@@ -38,15 +39,16 @@ def process_file(file_path, docID):
     return (docID, Counter(tokens), map)
 
 def make_index(path: str):
-    inverted_index = {chr(i): {} for i in range(97, 123)}
+    inverted_index = {}
     docCount = 0
     docID = 0
     counter = 1
-    totalTokens = 0
     pool = Pool()
+    x = 0
     # iterates through all folders in DEV
     for domain in os.listdir(path):
         try:
+            x += 1
             print(f"INDEXING DOMAIN: {domain}")
             # the following line will raise an error if the item in the DEV folder is not a domain folder
             # while also hopping into that directory if it is valid
@@ -62,25 +64,23 @@ def make_index(path: str):
                 docID += 1
                 token_counts = result[1]
                 for token, count in token_counts.items():
-                    totalTokens += 1
-                    first_letter = token[0].lower()
-                    # if token starts with a non-letter, it will be put in the "z" section
-                    if first_letter not in abc:
-                        first_letter = "z"
-                    # index structure: { a: { token: [[docID, count], [docID,count]], b: ... }
-                    #                  dict(letter -> dict(tokenStartingWithLetter -> list of docId, count pair lists))
-                    inverted_index[first_letter].setdefault(token, []).append([docID, count])
+                    # index structure: {account: [[docID, count], [docID,count]], apple: ... }
+                    #                  dict(tokenStartingWithLetter -> list of docId, count pair lists))
+                    inverted_index.setdefault(token, []).append([docID, count])
             docCount += len(results)
-            print(docCount)
             print("INDEX UPDATED\n")
             os.chdir("..")
+            # FOR SHORT INDEX CREATION
+            if x > 700:
+                break
         except NotADirectoryError:
             print("** Successfully skipped an invalid directory in DEV folder **\n")
     print(f"# OF DOCUMENTS: {docCount}")
-    print(f"# OF UNIQUE WORDS {totalTokens}")
+    print(f"# OF UNIQUE WORDS {len(inverted_index)}")
     index_in_bytes = pickle.dumps(inverted_index)
     print(f"SIZE IN KILOBYTES: {round(sys.getsizeof(index_in_bytes)/1000, 2)}")
     os.chdir("..")
+
     return inverted_index
 
 def _parseDocIDMapping(file):
@@ -92,36 +92,60 @@ def _parseDocIDMapping(file):
     return map
 
 
-def findResults(qWords: list, index: dict):
+def findResults(qWords: list, index: str, byteIndex: dict):
     #Creating local dictionary with docID -> (urlString, totalTokens) from text file made while parsing
     map = _parseDocIDMapping(os.path.join(os.getcwd(), "docID_mapping.txt"))
     matched_docs = []
+    found = False
     firstWord = True
     qWords = [stemmer.stem(word).lower() for word in qWords]
 
     start_time = time.perf_counter()
+    # opening file
+    index = open(index, "r")
+
     # For each word in the query
     for word in qWords:
+        qSize = len(qWords)
         current_docs = []
-        # Determing which of the 26 sections of the index to start at based on first char of token
-        if word[0] in abc:
-            category = word[0]
-        else:
-            category = "z"
-        # If word is in the index at that letter section
-        if word in index[category]:
-            # Key is token and data is a list(docID, tokenFrequency)
-            for key, data in index[category].items():
-                if word == key:
-                    for doc in data:
-                        if firstWord:
-                            matched_docs.append(doc)
-                        current_docs.append(doc)
-        # Intersects current query word documents with all those of previous query words
-        matched_docs = [doc for doc in matched_docs if doc in current_docs]
-        firstWord = False
+
+        # Seek to byte location
+        location = 0
+        for token, byteLocation in byte_index.items():
+            if word == token:
+                found = True
+                location = byteLocation
+            index.seek(location)
+        
+        
+        if not found:
+            print("No Results Found.\n")
+            return
+
+        data_string = index.readline()
+        while data_string[-3:-1] != "]]":
+            data_string += index.readline().strip()
+
+        tokenData = []
+        data = data_string.replace("],[", " ").replace("[", "").replace("]],", "").split()[1:]
+
+        # doc is currently a string representing docID and freq pairs
+        for doc in data:
+            tokenData.append([int(doc.split(",")[0]), int(doc.split(",")[1])])
+
+        matched_docs = tokenData
+
+        # n > 1 query terms not implemented; here is where you will optimize merging
+        if qSize > 1:
+            for doc in tokenData:
+                matched_docs.append(doc)
+                current_docs.append(doc)
+            # Intersects current query word documents with all those of previous query words
+            matched_docs = [doc for doc in matched_docs if doc in current_docs]
+
         # Search is complete
     end_time = time.perf_counter()
+    index.close()
     # Where ranking should be implemented: (For now, it is ranked based on token occurence frequency)
     matched_docs.sort(key=lambda x: -1 * x[1])
     for x in range(0,min(5, len(matched_docs))):
@@ -138,16 +162,22 @@ if __name__ == "__main__":
     if buildIndex:
         if os.path.exists(os.path.join(os.getcwd(), "docID_mapping.txt")):
             os.remove(os.path.join(os.getcwd(), "docID_mapping.txt"))
+
         store_index.store(make_index(os.path.join(os.getcwd(), "DEV")))
+        byte_index = store_byte_index.write_byte_index()
+    else:
+        with open("stored_byte_index.json") as f:
+            byte_index = json.load(f)
+
+    #print(byte_index[0:500])
 
     print("\n---------------------")
     print("Preparing Search...")
-    with open("stored_index.json", "r") as f:
-        index = json.load(f)
 
     while True:
         query = input("SEARCH QUERY (hit return/enter to quit): ")
         if not query:
             break
         qWords = query.split()
-        findResults(qWords, index)
+        index = "stored_index.json"
+        findResults(qWords, index, byte_index)
