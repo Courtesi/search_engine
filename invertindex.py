@@ -14,8 +14,6 @@ import store_index, store_byte_index
 stemmer = PorterStemmer()
 
 
-abc = "abcdefghijklmnopqrstuvqxyz"
-
 # takes in a webpage url (in json format) and returns a tuple: (docID, Counter dictionary of tokens --> freq)
 def process_file(file_path, docID):
     with open(file_path, 'r') as f:
@@ -36,43 +34,43 @@ def process_file(file_path, docID):
 
     with open("docID_mapping.txt", "a") as f:
         f.write(f"{docID} {all_content['url']} {len(tokens)}\n")
-    return (docID, Counter(tokens), map)
+
+    return (docID, Counter(tokens))
 
 def make_index(path: str):
+
     inverted_index = {}
-    docCount = 0
-    docID = 0
     counter = 1
     pool = Pool()
-    x = 0
-    # iterates through all folders in DEV
+
+    # Iterates through all folders in DEV
     for domain in os.listdir(path):
         try:
-            x += 1
             print(f"INDEXING DOMAIN: {domain}")
-            # the following line will raise an error if the item in the DEV folder is not a domain folder
-            # while also hopping into that directory if it is valid
+            # The following line will raise an error if the item in the DEV folder is not a domain folder
+            # but will hop into that directory if it is valid
             os.chdir(os.path.join(path, domain))
-            # the following line creates a list of all the webpages in the domain
+
+            # The following line creates a list of all the webpages in the current domain
             file_paths = [os.path.join(os.getcwd(), file) for file in os.listdir(os.getcwd())]
-            # the following line uses multithreading to parse each url with the process_file function
-            # returns (docID, Counter{token: freq})
+
+            # The following line uses multithreading to parse multiple urls simultaneously with the process_file function.
+            # The startmap function will return a list of tuples: (docID, Counter{token: freq})
             results = pool.starmap(process_file, zip(file_paths, [i for i in range(counter,len(file_paths)+counter+1)]))
             counter += len(file_paths)
 
+            # For each result (data of a single web page), update the index
             for result in results:
-                docID += 1
+                docID = result[0]
                 token_counts = result[1]
                 for token, count in token_counts.items():
                     # index structure: {account: [[docID, count], [docID,count]], apple: ... }
-                    #                  dict(tokenStartingWithLetter -> list of docId, count pair lists))
                     inverted_index.setdefault(token, []).append([docID, count])
-            docCount += len(results)
+
+            docCount = len(results)
+            
             print("INDEX UPDATED\n")
             os.chdir("..")
-            # FOR SHORT INDEX CREATION
-            if x > 700:
-                break
         except NotADirectoryError:
             print("** Successfully skipped an invalid directory in DEV folder **\n")
     print(f"# OF DOCUMENTS: {docCount}")
@@ -89,64 +87,78 @@ def _parseDocIDMapping(file):
         for line in f:
             idUrlTotal = line.split()
             map[int(idUrlTotal[0])] = (idUrlTotal[1], idUrlTotal[2])
+
     return map
 
+'''
+findResults takes in:
+    1) list of query words
+    2) open object of the main index file
+    3) docID to (docLink mapping, wordCount) dict
+'''
+def findResults(qWords: list, index: open, map: dict):
 
-def findResults(qWords: list, index: str, byteIndex: dict):
-    #Creating local dictionary with docID -> (urlString, totalTokens) from text file made while parsing
-    map = _parseDocIDMapping(os.path.join(os.getcwd(), "docID_mapping.txt"))
+    #Starting Search Timer
+    start_time = time.perf_counter()
+
+    # List which will contain all the documents matched by the query
     matched_docs = []
-    found = False
     firstWord = True
+
+    # Stemming the qWords to allow for matching with stemmed index keys
     qWords = [stemmer.stem(word).lower() for word in qWords]
 
-    start_time = time.perf_counter()
-    # opening file
-    index = open(index, "r")
-
-    # For each word in the query
+    # For each word in the query...
     for word in qWords:
         qSize = len(qWords)
+
+        # List which will contain all the documents matched by the current word in the list of query words
         current_docs = []
 
-        # Seek to byte location
+        # If the word is no where to be found in the index, the search is over
+        if word not in byte_index:
+            print("No Results Found.\n")
+            return
+        
+        # Use the byte index to find where in the main index to start searching for the term
         location = 0
         for token, byteLocation in byte_index.items():
             if word == token:
-                found = True
                 location = byteLocation
-            index.seek(location)
+                break
+        index.seek(location)    
         
-        
-        if not found:
-            print("No Results Found.\n")
-            return
-
+        # Once seeking to the byte location in the main index open object, start reading lines
+        #   (the first line read should be a match because the read starts at the proper byte location)
         data_string = index.readline()
+
+        # To avoid loading the entire index onto memory with json.dump(), we will be reading the json index 
+        # file as a string. The following code parses the string to get only the first key-value pair in the
+        # file starting from the seeked byte location. tokenData will be a list of [docID, freq] lists.
         while data_string[-3:-1] != "]]":
             data_string += index.readline().strip()
-
         tokenData = []
         data = data_string.replace("],[", " ").replace("[", "").replace("]],", "").split()[1:]
-
-        # doc is currently a string representing docID and freq pairs
         for doc in data:
             tokenData.append([int(doc.split(",")[0]), int(doc.split(",")[1])])
+        current_docs = tokenData
 
-        matched_docs = tokenData
-
-        # n > 1 query terms not implemented; here is where you will optimize merging
+        # The following code will only run if the query size is greater than 1.
+        # Here is where optimized merging should be implemented.
         if qSize > 1:
-            for doc in tokenData:
-                matched_docs.append(doc)
-                current_docs.append(doc)
-            # Intersects current query word documents with all those of previous query words
+            if firstWord:
+                matched_docs = current_docs
+                firstWord = False
             matched_docs = [doc for doc in matched_docs if doc in current_docs]
+    
+    if firstWord:
+        matched_docs = current_docs
 
-        # Search is complete
+    # Search is complete
     end_time = time.perf_counter()
     index.close()
-    # Where ranking should be implemented: (For now, it is ranked based on token occurence frequency)
+
+    # This is where ranking should be implemented. For now, it is ranked based on token frequency in the doc
     matched_docs.sort(key=lambda x: -1 * x[1])
     for x in range(0,min(5, len(matched_docs))):
         print(f"{x+1}) {map[matched_docs[x][0]][0]} with {matched_docs[x][1]} occurences")
@@ -169,7 +181,6 @@ if __name__ == "__main__":
         with open("stored_byte_index.json") as f:
             byte_index = json.load(f)
 
-    #print(byte_index[0:500])
 
     print("\n---------------------")
     print("Preparing Search...")
@@ -179,5 +190,6 @@ if __name__ == "__main__":
         if not query:
             break
         qWords = query.split()
-        index = "stored_index.json"
-        findResults(qWords, index, byte_index)
+        index = open("stored_index.json", "r")
+        map = _parseDocIDMapping(os.path.join(os.getcwd(), "docID_mapping.txt"))
+        findResults(qWords, index, map)
