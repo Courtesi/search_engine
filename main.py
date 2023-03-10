@@ -90,7 +90,7 @@ def make_index(path: str) -> list:
     index2_in_bytes = pickle.dumps(partial_index2)
     index3_in_bytes = pickle.dumps(partial_index3)
     print(f"SIZE IN KILOBYTES: {round((sys.getsizeof(index1_in_bytes) + sys.getsizeof(index2_in_bytes) + sys.getsizeof(index3_in_bytes))/1000, 2)}\n")
-    print("Processing...")
+    print("Index creation is complete. To search, set Line 198 to False and re-launch.")
     os.chdir("..")
 
     return [partial_index1, partial_index2, partial_index3]
@@ -206,14 +206,14 @@ if __name__ == "__main__":
         with open("stored_byte_index.json") as f:
             byte_index = json.load(f)
 
-    print("\n---------------------")
-    print("Preparing Search...")
+        print("\n---------------------")
+        print("Preparing Search...")
 
-    while True:
-        query = input("SEARCH QUERY (hit return/enter to quit): ")
-        if not query:
-            break
-        qWords = query.split()
-        indices = [open("partial_index1.json", "r"), open("partial_index2.json", "r"), open("partial_index3.json", "r")]
-        map = _parseDocIDMapping(os.path.join(os.getcwd(), "docID_mapping.txt"))
-        findResults(qWords, indices, map)
+        while True:
+            query = input("SEARCH QUERY (hit return/enter to quit): ")
+            if not query:
+                break
+            qWords = query.split()
+            indices = [open("partial_index1.json", "r"), open("partial_index2.json", "r"), open("partial_index3.json", "r")]
+            map = _parseDocIDMapping(os.path.join(os.getcwd(), "docID_mapping.txt"))
+            findResults(qWords, indices, map)
