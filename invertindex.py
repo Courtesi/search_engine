@@ -7,10 +7,9 @@ import time
 from collections import Counter
 from multiprocessing import Pool
 from bs4 import BeautifulSoup
-import nltk
 from nltk.stem import PorterStemmer
 from nltk.tokenize import word_tokenize
-import store_index, store_byte_index
+import store_indices, store_byte_index
 stemmer = PorterStemmer()
 
 
@@ -37,10 +36,17 @@ def process_file(file_path, docID):
 
     return (docID, Counter(tokens))
 
-def make_index(path: str):
 
-    inverted_index = {}
+
+def make_index(path: str) -> list:
+
+    partial_index1 = {}
+    partial_index2 = {}
+    partial_index3 = {}
+
     counter = 1
+    tokenNum = 0
+    BUFFER_SIZE = 200000
     pool = Pool()
 
     # Iterates through all folders in DEV
@@ -64,8 +70,13 @@ def make_index(path: str):
                 docID = result[0]
                 token_counts = result[1]
                 for token, count in token_counts.items():
-                    # index structure: {account: [[docID, count], [docID,count]], apple: ... }
-                    inverted_index.setdefault(token, []).append([docID, count])
+                    tokenNum += 1
+                    if tokenNum <= BUFFER_SIZE:
+                        partial_index1.setdefault(token, []).append([docID, count])
+                    elif tokenNum <= BUFFER_SIZE * 2:
+                        partial_index2.setdefault(token, []).append([docID, count])
+                    else:
+                        partial_index3.setdefault(token, []).append([docID, count])
 
             docCount = len(results)
             
@@ -74,12 +85,17 @@ def make_index(path: str):
         except NotADirectoryError:
             print("** Successfully skipped an invalid directory in DEV folder **\n")
     print(f"# OF DOCUMENTS: {docCount}")
-    print(f"# OF UNIQUE WORDS {len(inverted_index)}")
-    index_in_bytes = pickle.dumps(inverted_index)
-    print(f"SIZE IN KILOBYTES: {round(sys.getsizeof(index_in_bytes)/1000, 2)}")
+    print(f"# OF UNIQUE WORDS {tokenNum}")
+    index1_in_bytes = pickle.dumps(partial_index1)
+    index2_in_bytes = pickle.dumps(partial_index2)
+    index3_in_bytes = pickle.dumps(partial_index3)
+    print(f"SIZE IN KILOBYTES: {round((sys.getsizeof(index1_in_bytes) + sys.getsizeof(index2_in_bytes) + sys.getsizeof(index3_in_bytes))/1000, 2)}\n")
+    print("Processing...")
     os.chdir("..")
 
-    return inverted_index
+    return [partial_index1, partial_index2, partial_index3]
+
+
 
 def _parseDocIDMapping(file):
     map = {}
@@ -87,16 +103,17 @@ def _parseDocIDMapping(file):
         for line in f:
             idUrlTotal = line.split()
             map[int(idUrlTotal[0])] = (idUrlTotal[1], idUrlTotal[2])
-
     return map
+
+
 
 '''
 findResults takes in:
     1) list of query words
-    2) open object of the main index file
+    2) list of open partial index files
     3) docID to (docLink mapping, wordCount) dict
 '''
-def findResults(qWords: list, index: open, map: dict):
+def findResults(qWords: list, indices: list, map: dict):
 
     #Starting Search Timer
     start_time = time.perf_counter()
@@ -120,12 +137,17 @@ def findResults(qWords: list, index: open, map: dict):
             print("No Results Found.\n")
             return
         
-        # Use the byte index to find where in the main index to start searching for the term
+        partialIndex = "?"
         location = 0
-        for token, byteLocation in byte_index.items():
+
+        # Use the byte index to find where in the main index to start searching for the term
+        for token, tokenLocation in byte_index.items():
+            # Note: tokenLocation is a tuple: (partialIndexNumber, byte)
             if word == token:
-                location = byteLocation
+                location = tokenLocation[1]
                 break
+        partialIndex = tokenLocation[0]
+        index = indices[partialIndex-1]
         index.seek(location)    
         
         # Once seeking to the byte location in the main index open object, start reading lines
@@ -164,23 +186,25 @@ def findResults(qWords: list, index: open, map: dict):
         print(f"{x+1}) {map[matched_docs[x][0]][0]} with {matched_docs[x][1]} occurences")
     print(f"SEARCH TIME: {end_time-start_time:.3f} seconds")
     print()
+
     return matched_docs
+
+
 
 if __name__ == "__main__":
     # !!!
     # SET TRUE IF YOU ARE RUNNING FOR THE FIRST TIME AND NEED TO BUILD THE INDEX
     # SET FALSE IF INDEX IS ALREADY BUILT AND YOU ARE READY TO SEARCH ONLY
-    buildIndex = False
+    buildIndex = True
     if buildIndex:
         if os.path.exists(os.path.join(os.getcwd(), "docID_mapping.txt")):
             os.remove(os.path.join(os.getcwd(), "docID_mapping.txt"))
 
-        store_index.store(make_index(os.path.join(os.getcwd(), "DEV")))
+        store_indices.store(make_index(os.path.join(os.getcwd(), "DEV")))
         byte_index = store_byte_index.write_byte_index()
     else:
         with open("stored_byte_index.json") as f:
             byte_index = json.load(f)
-
 
     print("\n---------------------")
     print("Preparing Search...")
@@ -190,6 +214,6 @@ if __name__ == "__main__":
         if not query:
             break
         qWords = query.split()
-        index = open("stored_index.json", "r")
+        indices = [open("partial_index1.json", "r"), open("partial_index2.json", "r"), open("partial_index3.json", "r")]
         map = _parseDocIDMapping(os.path.join(os.getcwd(), "docID_mapping.txt"))
-        findResults(qWords, index, map)
+        findResults(qWords, indices, map)
