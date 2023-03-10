@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <title>Search Engine</title>
+</head>
+<body>
+    <img src="searchImg.png" alt="Search Engine Image">
+    <h1>Search Engine</h1>
+    <form id="form" method="POST" action="{{ url_for('results')}}">
+        <input type="text" id="searchQuery" name="searchQuery"><br>
+        <input type="submit" value="search...">
+    </form>
+    </form>
+
+</body>
+</html>
+    
