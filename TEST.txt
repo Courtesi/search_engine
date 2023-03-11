@@ -1,0 +1,32 @@
+irvine
+    -issue:
+irvine ca
+    -issue: runtime error
+    -improved by implementing multi-word queries
+irvine, ca
+    -issue: no results because of comma
+    -improved by filtering query through regex
+beach vacation
+    -issue: irrelvant results because of lack of proximity matching
+university of washington
+    -issue: slow search time
+united states of america
+    -issue: no results because of "of"
+united states america
+    -issue: irrelvant results
+master of software engineering
+    -issue: irrelvant results because of lack of proximity matching
+degree in computer science
+    -issue: irrelvant results because of lack of proximity matching
+harry potter
+    -issue: irrelvant results because of lack of proximity matching
+IRVIN
+tokyo, japan
+emily navarro
+internship
+a
+it
+banana
+cucumbers crickets and a curious cricket
+テスト
+:)
