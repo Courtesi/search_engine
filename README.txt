@@ -14,5 +14,4 @@ BUILDING THE INDEX
 USING SEARCH
      - Once index is completed and execution stops on its own after a few seconds, 
        set buildIndex to False and relaunch main.py
-     - Type your search query in the console followed by the return/enter key
-     - If you want to stop execution, hit the return/enter key as the query
+     - Type your search query in the search box from the GUI that pops up
