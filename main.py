@@ -1,16 +1,18 @@
 import json
 import os
-import re
 import pickle
 import sys
 import time
+import re
+import tkinter as tk
 from collections import Counter
 from multiprocessing import Pool
 from bs4 import BeautifulSoup
 from nltk.stem import PorterStemmer
 from nltk.tokenize import word_tokenize
-import store_indices, store_byte_index
+import store_indices, store_byte_index, ranking
 stemmer = PorterStemmer()
+
 
 
 # takes in a webpage url (in json format) and returns a tuple: (docID, Counter dictionary of tokens --> freq)
@@ -125,6 +127,8 @@ def findResults(qWords: list, indices: list, map: dict):
     # Stemming the qWords to allow for matching with stemmed index keys
     qWords = [stemmer.stem(word).lower() for word in qWords]
 
+    termPostingDict = {}
+
     # For each word in the query...
     for word in qWords:
         qSize = len(qWords)
@@ -134,10 +138,9 @@ def findResults(qWords: list, indices: list, map: dict):
 
         # If the word is no where to be found in the index, the search is over
         if word not in byte_index:
-            print("No Results Found.\n")
-            return
+            return []
         
-        partialIndex = "?"
+        partialIndex = ""
         location = 0
 
         # Use the byte index to find where in the main index to start searching for the term
@@ -148,7 +151,7 @@ def findResults(qWords: list, indices: list, map: dict):
                 break
         partialIndex = tokenLocation[0]
         index = indices[partialIndex-1]
-        index.seek(location)    
+        index.seek(location)
         
         # Once seeking to the byte location in the main index open object, start reading lines
         #   (the first line read should be a match because the read starts at the proper byte location)
@@ -164,6 +167,9 @@ def findResults(qWords: list, indices: list, map: dict):
         for doc in data:
             tokenData.append([int(doc.split(",")[0]), int(doc.split(",")[1])])
         current_docs = tokenData
+        matched_docs = current_docs
+
+        termPostingDict[word] = current_docs
 
         # The following code will only run if the query size is greater than 1.
         # Here is where optimized merging should be implemented.
@@ -172,48 +178,100 @@ def findResults(qWords: list, indices: list, map: dict):
                 matched_docs = current_docs
                 firstWord = False
             matched_docs = [doc for doc in matched_docs if doc in current_docs]
-    
-    if firstWord:
-        matched_docs = current_docs
+
+        scores = []
+
+        for posting in current_docs:
+            score = ranking.calcTfIdf(word, map, termPostingDict, posting[0])
+            scores.append((score, map[posting[0]][0]))
+
+    sorted_scores = sorted(scores, key=lambda x: x[0], reverse=True)
 
     # Search is complete
     end_time = time.perf_counter()
     index.close()
 
-    # This is where ranking should be implemented. For now, it is ranked based on token frequency in the doc
     matched_docs.sort(key=lambda x: -1 * x[1])
-    for x in range(0,min(5, len(matched_docs))):
-        print(f"{x+1}) {map[matched_docs[x][0]][0]} with {matched_docs[x][1]} occurences")
-    print(f"SEARCH TIME: {end_time-start_time:.3f} seconds")
-    print()
-
-    return matched_docs
+    return ([x[1] for x in sorted_scores[:5]], f"SEARCH TIME: {end_time-start_time:.3f} seconds")
 
 
 
 if __name__ == "__main__":
-    # !!!
+    # !! READ ME !!
     # SET TRUE IF YOU ARE RUNNING FOR THE FIRST TIME AND NEED TO BUILD THE INDEX
     # SET FALSE IF INDEX IS ALREADY BUILT AND YOU ARE READY TO SEARCH ONLY
-    buildIndex = True
+    buildIndex = False
     if buildIndex:
+        # if the docID mapping file exists from a previous index creation, delete it
         if os.path.exists(os.path.join(os.getcwd(), "docID_mapping.txt")):
             os.remove(os.path.join(os.getcwd(), "docID_mapping.txt"))
 
+        # creates the index by calling make_index()
         store_indices.store(make_index(os.path.join(os.getcwd(), "DEV")))
+        #creates the byte index (index of index) after the index files are made
         byte_index = store_byte_index.write_byte_index()
     else:
         with open("stored_byte_index.json") as f:
             byte_index = json.load(f)
 
-        print("\n---------------------")
-        print("Preparing Search...")
 
-        while True:
-            query = input("SEARCH QUERY (hit return/enter to quit): ")
+        topResults = []
+        output_labels = []
+
+        def guiSearch(query, output_labels, searchTime):
+            for o_label in output_labels:
+                o_label.destroy()
+            output_labels.clear()
+
+            noResultLabel = tk.Label(root, text="No Results Found")
+
             if not query:
-                break
+                return
+
+            pattern = re.compile(r'[^\w\s]+')
+            query = re.sub(pattern, '', query)
             qWords = query.split()
+            
             indices = [open("partial_index1.json", "r"), open("partial_index2.json", "r"), open("partial_index3.json", "r")]
             map = _parseDocIDMapping(os.path.join(os.getcwd(), "docID_mapping.txt"))
-            findResults(qWords, indices, map)
+
+            global topResults
+            results = findResults(qWords, indices, map)
+
+            # If there are no results
+            if not results:
+                noResultLabel = tk.Label(root, text="No Results Found")
+                output_labels.append(noResultLabel)
+                for o_label in output_labels:
+                    o_label.pack(side=tk.TOP)
+        
+            # If there are results
+            else:
+                topResults = results[0]
+                searchTimeStr = results[1]
+                for i in range(len(topResults)):
+                    text=f"{i+1}) {topResults[i][:100]}"
+                    label = tk.Label(root, text=text)
+                    output_labels.append(label)
+                for o_label in output_labels:
+                    o_label.pack(side=tk.TOP)
+                searchTime.config(text=searchTimeStr)
+                searchTime.pack(side=tk.BOTTOM)
+            return output_labels
+
+        # Create a new instance of the Tk class
+        root = tk.Tk()
+        root.title("Search Engine")
+        # Set the size of the window
+        root.geometry("800x270")
+        # Create a new Entry widget
+        text_entry = tk.Entry(root)
+        title = tk.Label(root, text="\nQuery:")
+        searchButton = tk.Button(root, text="Search", command=lambda: guiSearch(text_entry.get(), output_labels, searchTime))
+        searchTime = tk.Label(root, text="Placeholder")
+        # Pack the Entry, Label, and Button widgets into the window
+        title.pack(side=tk.TOP)
+        text_entry.pack(side=tk.TOP)
+        searchButton.pack(side=tk.TOP)
+        # Start the Tkinter event loop
+        root.mainloop()
