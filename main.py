@@ -138,7 +138,7 @@ def findResults(qWords: list, indices: list, map: dict):
 
         # If the word is no where to be found in the index, the search is over
         if word not in byte_index:
-            return []
+            break
         
         partialIndex = ""
         location = 0
